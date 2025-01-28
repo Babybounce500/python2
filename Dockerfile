@@ -18,3 +18,4 @@ EXPOSE 5000
 
 # 7. Definiere den Befehl zum Starten der Flask-App
 CMD ["gunicorn", "-b", "0.0.0.0:5000", "app:app"]
+
