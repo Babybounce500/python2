@@ -3,37 +3,21 @@ import numpy as np
 import matplotlib.pyplot as plt
 import yfinance as yf
 from datetime import datetime
+from flask import Flask, render_template, send_file
+import io
+from flask_cors import CORS  # Importiere Flask-CORS
+
+app = Flask(__name__)
+CORS(app)  # Aktiviere CORS für die gesamte App
 
 def load_data(ticker, start, end):
-    """
-    Lädt historische Aktienkurse von Yahoo Finance.
-    
-    :param ticker: Aktienmarktsymbol
-    :param start: Startdatum (YYYY-MM-DD)
-    :param end: Enddatum (YYYY-MM-DD)
-    :return: DataFrame mit den historischen Kursdaten
-    """
     data = yf.download(ticker, start=start, end=end)
     return data
 
 def calculate_moving_average(data, window):
-    """
-    Berechnet den gleitenden Durchschnitt über einen bestimmten Zeitraum.
-    
-    :param data: DataFrame mit den Kursdaten
-    :param window: Zeitraum für den gleitenden Durchschnitt
-    :return: Series mit dem gleitenden Durchschnitt
-    """
     return data['Close'].rolling(window=window).mean()
 
 def calculate_rsi(data, window=14):
-    """
-    Berechnet den Relative Strength Index (RSI).
-    
-    :param data: DataFrame mit den Kursdaten
-    :param window: Zeitraum für die RSI-Berechnung
-    :return: Series mit dem RSI
-    """
     delta = data['Close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
@@ -43,20 +27,28 @@ def calculate_rsi(data, window=14):
     
     return rsi
 
-def plot_data(data, moving_average, rsi):
-    """
-    Plottet die Kursdaten, den gleitenden Durchschnitt und den RSI.
-    
-    :param data: DataFrame mit den Kursdaten
-    :param moving_average: Series mit dem gleitenden Durchschnitt
-    :param rsi: Series mit dem RSI
-    """
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/plot/<ticker>')
+def plot(ticker):
+    # Daten laden
+    start_date = '2020-01-01'
+    end_date = datetime.today().strftime('%Y-%m-%d')
+    stock_data = load_data(ticker, start_date, end_date)
+
+    window = 20  # Zeitraum für den gleitenden Durchschnitt (in Tagen)
+    moving_avg = calculate_moving_average(stock_data, window)
+    rsi = calculate_rsi(stock_data)
+
+    # Plot erzeugen
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
 
     # Kursdaten und gleitenden Durchschnitt
-    ax1.plot(data['Close'], label='Schlusskurs', color='blue')
-    ax1.plot(moving_average, label='Gleitender Durchschnitt', color='orange')
-    ax1.set_title('Aktienkurse und gleitender Durchschnitt')
+    ax1.plot(stock_data['Close'], label='Schlusskurs', color='blue')
+    ax1.plot(moving_avg, label='Gleitender Durchschnitt', color='orange')
+    ax1.set_title(f'Aktienkurse und gleitender Durchschnitt für {ticker}')
     ax1.set_xlabel('Datum')
     ax1.set_ylabel('Preis in USD')
     ax1.legend()
@@ -72,45 +64,13 @@ def plot_data(data, moving_average, rsi):
     ax2.legend()
     ax2.grid()
 
+    # Bild als Bytes streamen
+    img = io.BytesIO()
     plt.tight_layout()
-    plt.show()
+    plt.savefig(img, format='png')
+    img.seek(0)
 
-def advanced_analysis(data):
-    max_close = data['Close'].max()
-    min_close = data['Close'].min()
-    total_volume = data['Volume'].sum()    
+    return send_file(img, mimetype='image/png')
 
-    print(f'Maximale Schlusskurs: {max_close}')
-    print(f'Minimaler Schlusskurs: {min_close}')
-    print(f'Totales Volumen: {total_volume}')
-
-def main():
-    # Benutzer nach dem Ticker fragen
-    ticker = input("Gib das Aktienkürzel ein (z.B. AAPL für Apple, JPM für JPMorgan): ").upper()
-    
-    start_date = '2020-01-01'
-    end_date = datetime.today().strftime('%Y-%m-%d')  # Heute als Enddatum
-
-    window = 20  # Zeitraum für den gleitenden Durchschnitt (in Tagen)
-
-    # Daten laden
-    stock_data = load_data(ticker, start_date, end_date)
-
-    # Überprüfen Sie, ob Daten vorhanden sind
-    if not stock_data.empty:
-        # Gleitenden Durchschnitt berechnen
-        moving_avg = calculate_moving_average(stock_data, window)
-
-        # RSI berechnen
-        rsi = calculate_rsi(stock_data)
-
-        # Daten plotten
-        plot_data(stock_data, moving_avg, rsi)
-
-        # Erweiterte Analyse durchführen
-        advanced_analysis(stock_data)
-    else:
-        print(f"Es wurden keine Daten für das Ticker-Symbol {ticker} zurückgegeben. Bitte überprüfen Sie das Ticker-Symbol.")
-
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    app.run(debug=True)
