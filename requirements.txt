@@ -1,0 +1,4 @@
+Flask==2.0.1
+matplotlib==3.4.2
+yfinance==0.1.63
+gunicorn==20.1.0
